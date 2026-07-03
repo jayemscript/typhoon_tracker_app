@@ -1,16 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
-import {
-  MapContainer,
-  TileLayer,
+import { useMemo, useState } from "react";
+import Map, {
+  Source,
+  Layer,
   Marker,
-  Polyline,
-  Circle,
   Popup,
-  ZoomControl,
-} from "react-leaflet";
-import L from "leaflet";
+  NavigationControl,
+  type LayerProps,
+} from "react-map-gl/maplibre";
+import type { FeatureCollection, LineString, Polygon } from "geojson";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { createGeoCircle } from "@/lib/geo";
 import type { Storm, StormCategory } from "@/types/storm";
 
 interface TyphoonMapProps {
@@ -33,25 +34,41 @@ const CATEGORY_LABELS: Record<StormCategory, string> = {
   "super-typhoon": "Super Typhoon",
 };
 
-function createStormIcon(color: string) {
-  return L.divIcon({
-    className: "storm-marker",
-    html: `<span style="
-      display:block;width:16px;height:16px;border-radius:9999px;
-      background:${color};border:2px solid white;
-      box-shadow:0 0 0 2px ${color}66, 0 2px 6px rgba(0,0,0,0.35);
-    "></span>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
-  });
-}
+// Free, keyless, open-source vector tile style — no Mapbox account needed.
+const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+
+const trackLayerStyle: LayerProps = {
+  id: "storm-track",
+  type: "line",
+  layout: { "line-join": "round", "line-cap": "round" },
+  paint: {
+    "line-color": ["get", "color"],
+    "line-width": 3,
+    "line-dasharray": [
+      "case",
+      ["get", "isForecast"],
+      ["literal", [2, 2]],
+      ["literal", [1, 0]],
+    ],
+  },
+};
+
+const uncertaintyLayerStyle: LayerProps = {
+  id: "storm-uncertainty",
+  type: "fill",
+  paint: {
+    "fill-color": ["get", "color"],
+    "fill-opacity": 0.08,
+  },
+};
 
 export function TyphoonMap({ storms }: TyphoonMapProps) {
-  const center: [number, number] = useMemo(() => {
+  const [activeStormId, setActiveStormId] = useState<string | null>(null);
+
+  const initialView = useMemo(() => {
     const active = storms.find((s) => s.isActive);
-    return active
-      ? [active.currentPosition.lat, active.currentPosition.lng]
-      : [15, 125];
+    const center = active?.currentPosition ?? { lat: 15, lng: 125 };
+    return { longitude: center.lng, latitude: center.lat, zoom: 5 };
   }, [storms]);
 
   const activeCategories = useMemo(
@@ -59,82 +76,132 @@ export function TyphoonMap({ storms }: TyphoonMapProps) {
     [storms],
   );
 
+  const trackGeoJson: FeatureCollection<LineString> = useMemo(
+    () => ({
+      type: "FeatureCollection",
+      features: storms.flatMap((storm) => {
+        const color = CATEGORY_COLORS[storm.category];
+        const forecastStart = storm.track.findIndex((p) => p.isForecast);
+        const coords = storm.track.map((p) => [p.position.lng, p.position.lat]);
+
+        const historical = {
+          type: "Feature" as const,
+          properties: { color, isForecast: false },
+          geometry: {
+            type: "LineString" as const,
+            coordinates:
+              forecastStart === -1
+                ? coords
+                : coords.slice(0, forecastStart + 1),
+          },
+        };
+
+        if (forecastStart === -1) return [historical];
+
+        const forecast = {
+          type: "Feature" as const,
+          properties: { color, isForecast: true },
+          geometry: {
+            type: "LineString" as const,
+            coordinates: coords.slice(forecastStart),
+          },
+        };
+
+        return [historical, forecast];
+      }),
+    }),
+    [storms],
+  );
+
+  const uncertaintyGeoJson: FeatureCollection<Polygon> = useMemo(
+    () => ({
+      type: "FeatureCollection",
+      features: storms
+        .filter((s) => s.radiusOfUncertaintyKm)
+        .map((storm) => ({
+          type: "Feature" as const,
+          properties: { color: CATEGORY_COLORS[storm.category] },
+          geometry: {
+            type: "Polygon" as const,
+            coordinates: [
+              createGeoCircle(
+                storm.currentPosition,
+                storm.radiusOfUncertaintyKm!,
+              ),
+            ],
+          },
+        })),
+    }),
+    [storms],
+  );
+
+  const activeStorm = storms.find((s) => s.id === activeStormId) ?? null;
+
   return (
     <div className="relative h-full w-full">
-      <MapContainer
-        center={center}
-        zoom={5}
-        scrollWheelZoom
-        zoomControl={false}
-        className="h-full w-full"
+      <Map
+        initialViewState={initialView}
+        mapStyle={MAP_STYLE}
+        style={{ width: "100%", height: "100%" }}
       >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        />
-        <ZoomControl position="bottomright" />
+        <NavigationControl position="bottom-right" />
+
+        <Source
+          id="storm-uncertainty-src"
+          type="geojson"
+          data={uncertaintyGeoJson}
+        >
+          <Layer {...uncertaintyLayerStyle} />
+        </Source>
+
+        <Source id="storm-track-src" type="geojson" data={trackGeoJson}>
+          <Layer {...trackLayerStyle} />
+        </Source>
 
         {storms.map((storm) => {
           const color = CATEGORY_COLORS[storm.category];
-          const trackPositions: [number, number][] = storm.track.map((p) => [
-            p.position.lat,
-            p.position.lng,
-          ]);
-          const forecastStart = storm.track.findIndex((p) => p.isForecast);
-
           return (
-            <div key={storm.id}>
-              <Polyline
-                positions={
-                  forecastStart === -1
-                    ? trackPositions
-                    : trackPositions.slice(0, forecastStart + 1)
-                }
-                pathOptions={{ color, weight: 3 }}
+            <Marker
+              key={storm.id}
+              longitude={storm.currentPosition.lng}
+              latitude={storm.currentPosition.lat}
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                setActiveStormId(storm.id);
+              }}
+            >
+              <span
+                className="block h-4 w-4 cursor-pointer rounded-full border-2 border-white"
+                style={{
+                  backgroundColor: color,
+                  boxShadow: `0 0 0 2px ${color}66, 0 2px 6px rgba(0,0,0,0.35)`,
+                }}
               />
-
-              {forecastStart !== -1 && (
-                <Polyline
-                  positions={trackPositions.slice(forecastStart)}
-                  pathOptions={{ color, weight: 3, dashArray: "6 8" }}
-                />
-              )}
-
-              {storm.radiusOfUncertaintyKm && (
-                <Circle
-                  center={[
-                    storm.currentPosition.lat,
-                    storm.currentPosition.lng,
-                  ]}
-                  radius={storm.radiusOfUncertaintyKm * 1000}
-                  pathOptions={{ color, fillOpacity: 0.08, weight: 1 }}
-                />
-              )}
-
-              <Marker
-                position={[
-                  storm.currentPosition.lat,
-                  storm.currentPosition.lng,
-                ]}
-                icon={createStormIcon(color)}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <p className="font-semibold">{storm.name}</p>
-                    <p className="capitalize text-muted-foreground">
-                      {storm.category.replace(/-/g, " ")}
-                    </p>
-                    <p>{storm.windSpeedKph} km/h winds</p>
-                    <p>{storm.pressureHpa} hPa</p>
-                  </div>
-                </Popup>
-              </Marker>
-            </div>
+            </Marker>
           );
         })}
-      </MapContainer>
 
-      <div className="pointer-events-none absolute bottom-4 left-4 z-1000">
+        {activeStorm && (
+          <Popup
+            longitude={activeStorm.currentPosition.lng}
+            latitude={activeStorm.currentPosition.lat}
+            onClose={() => setActiveStormId(null)}
+            closeOnClick={false}
+            offset={12}
+          >
+            <div className="text-sm">
+              <p className="font-semibold">{activeStorm.name}</p>
+              <p className="capitalize text-muted-foreground">
+                {activeStorm.category.replace(/-/g, " ")}
+              </p>
+              <p>{activeStorm.windSpeedKph} km/h winds</p>
+              <p>{activeStorm.pressureHpa} hPa</p>
+            </div>
+          </Popup>
+        )}
+      </Map>
+
+      <div className="pointer-events-none absolute bottom-4 left-4 z-10">
         <div className="pointer-events-auto rounded-lg border bg-background/90 p-3 shadow-sm backdrop-blur">
           <p className="mb-2 text-xs font-medium text-muted-foreground">
             Storm Category
