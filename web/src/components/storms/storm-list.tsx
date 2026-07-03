@@ -1,4 +1,4 @@
-import { StormCard } from "@/components/storm/storm-card";
+import { StormCard } from "@/components/storms/storm-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import type { Storm } from "@/types/storm";
 

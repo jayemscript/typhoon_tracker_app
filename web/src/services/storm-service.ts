@@ -1,7 +1,3 @@
-import "server-only";
-import { mockStorms } from "@/lib/mock-data/storms";
-import { StormListSchema, StormSchema, type Storm } from "@/types/storm";
-
 /**
  * Storm data access layer.
  *
@@ -10,20 +6,23 @@ import { StormListSchema, StormSchema, type Storm } from "@/types/storm";
  * tropical-cyclone source (NOAA/JTWC, JMA, PAGASA), keeping the same
  * signatures and Zod validation so nothing upstream needs to change.
  */
+import "server-only";
+import { cache } from "react";
+import { mockStorms } from "@/lib/mock-data/storms";
+import { StormListSchema, StormSchema, type Storm } from "@/types/storm";
 
-export async function getAllStorms(): Promise<Storm[]> {
-  // Simulates network latency of a real API
+export const getAllStorms = cache(async (): Promise<Storm[]> => {
   await new Promise((resolve) => setTimeout(resolve, 50));
   return StormListSchema.parse(mockStorms);
-}
+});
 
-export async function getActiveStorms(): Promise<Storm[]> {
+export const getActiveStorms = cache(async (): Promise<Storm[]> => {
   const storms = await getAllStorms();
   return storms.filter((storm) => storm.isActive);
-}
+});
 
-export async function getStormById(id: string): Promise<Storm | null> {
+export const getStormById = cache(async (id: string): Promise<Storm | null> => {
   const storms = await getAllStorms();
   const storm = storms.find((s) => s.id === id) ?? null;
   return storm ? StormSchema.parse(storm) : null;
-}
+});

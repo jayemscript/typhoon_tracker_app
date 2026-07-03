@@ -1,6 +1,6 @@
 import { getAllStorms } from "@/services/storm-service";
 import { SectionHeader } from "@/components/shared/section-header";
-import { StormList } from "@/components/storm/storm-list";
+import { StormList } from "@/components/storms/storm-list";
 
 export async function RecentStormsSection() {
   const storms = await getAllStorms();

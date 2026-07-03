@@ -1,6 +1,6 @@
 import { getActiveStorms } from "@/services/storm-service";
 import { SectionHeader } from "@/components/shared/section-header";
-import { StormCard } from "@/components/storm/storm-card";
+import { StormCard } from "@/components/storms/storm-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { getStormSeverityRank } from "@/lib/constants/storm";
 
