@@ -1,0 +1,46 @@
+import type { WeatherUpdate } from "@/types/weather";
+
+export const mockWeatherUpdates: WeatherUpdate[] = [
+  {
+    id: "wx-manila",
+    location: "Manila",
+    region: "NCR, Philippines",
+    temperatureC: 29,
+    condition: "rain",
+    humidityPercent: 82,
+    windSpeedKph: 24,
+    rainfallMm: 12,
+    updatedAt: "2026-07-03T05:00:00.000Z",
+  },
+  {
+    id: "wx-cebu",
+    location: "Cebu City",
+    region: "Central Visayas, Philippines",
+    temperatureC: 31,
+    condition: "partly-cloudy",
+    humidityPercent: 68,
+    windSpeedKph: 14,
+    updatedAt: "2026-07-03T05:00:00.000Z",
+  },
+  {
+    id: "wx-tuguegarao",
+    location: "Tuguegarao",
+    region: "Cagayan Valley, Philippines",
+    temperatureC: 27,
+    condition: "thunderstorm",
+    humidityPercent: 90,
+    windSpeedKph: 38,
+    rainfallMm: 45,
+    updatedAt: "2026-07-03T05:00:00.000Z",
+  },
+  {
+    id: "wx-davao",
+    location: "Davao City",
+    region: "Davao Region, Philippines",
+    temperatureC: 30,
+    condition: "clear",
+    humidityPercent: 60,
+    windSpeedKph: 9,
+    updatedAt: "2026-07-03T05:00:00.000Z",
+  },
+];
