@@ -124,3 +124,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+.leaflet-popup-content-wrapper {
+  border-radius: 0.5rem;
+}
+.leaflet-control-zoom {
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+  border: none !important;
+}
